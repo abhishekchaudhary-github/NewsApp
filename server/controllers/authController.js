@@ -2,6 +2,7 @@ const User = require('../models/User');
 const { StatusCodes } = require('http-status-codes');
 const CustomError = require('../errors');
 const { attachCookiesToResponse, createTokenUser } = require('../utils');
+const crypto = require('crypto')
 
 const register = async (req, res) => {
   const { email, name, password } = req.body;
@@ -15,11 +16,12 @@ const register = async (req, res) => {
   const isFirstAccount = (await User.countDocuments({})) === 0;
   const role = isFirstAccount ? 'admin' : 'user';
 
+  const verifiactionToken = crypto. randomBytes(40).toString('hex')
   // const user = await User.create({ name, email, password, role });
   // const tokenUser = createTokenUser(user);
   // attachCookiesToResponse({ res, user: tokenUser });
   // res.status(StatusCodes.CREATED).json({ user: tokenUser });
-  const user = await User.create({name,email,password,verificationToken:'fake token',isVerified:false})
+  const user = await User.create({name,email,password,verifiactionToken,isVerified:false})
   res.status(200).json({user})
 };
 const login = async (req, res) => {
@@ -37,11 +39,35 @@ const login = async (req, res) => {
   if (!isPasswordCorrect) {
     throw new CustomError.UnauthenticatedError('Invalid Credentials');
   }
+
+  if(!user.isVerified) {
+    throw new CustomError.UnauthenticatedError('Please verify your email')
+  }
+
+
   const tokenUser = createTokenUser(user);
   attachCookiesToResponse({ res, user: tokenUser });
 
   res.status(StatusCodes.OK).json({ user: tokenUser });
 };
+
+const verifyEmail = async (req,res) => {
+  const {verifiactionToken,email} = req.body
+  const resp = await user.findOne({email})
+  if(!resp){
+    throw new CustomError.UnauthenticatedError('Invalid link');
+  }
+  if(resp.verifiactionToken!==verifiactionToken){
+    throw new CustomError.UnauthenticatedError('Invalid link');
+  }
+  resp.isVerified = true
+  user.verified = Date.now()
+  user.verifiactionToken = ''
+
+  await user.save()
+  res.status(StatusCodes.Ok).json({msg:'Email Verified'})
+}
+
 const logout = async (req, res) => {
   res.cookie('token', 'logout', {
     httpOnly: true,
@@ -54,4 +80,5 @@ module.exports = {
   register,
   login,
   logout,
+  verifyEmail
 };
