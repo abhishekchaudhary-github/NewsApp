@@ -2,7 +2,8 @@ const User = require('../models/User');
 const { StatusCodes } = require('http-status-codes');
 const CustomError = require('../errors');
 const { attachCookiesToResponse, createTokenUser } = require('../utils');
-const crypto = require('crypto')
+const crypto = require('crypto');
+const sendEmail = require('../utils/sendEmail')
 
 const register = async (req, res) => {
   const { email, name, password } = req.body;
@@ -16,13 +17,15 @@ const register = async (req, res) => {
   const isFirstAccount = (await User.countDocuments({})) === 0;
   const role = isFirstAccount ? 'admin' : 'user';
 
-  const verifiactionToken = crypto. randomBytes(40).toString('hex')
   // const user = await User.create({ name, email, password, role });
   // const tokenUser = createTokenUser(user);
   // attachCookiesToResponse({ res, user: tokenUser });
   // res.status(StatusCodes.CREATED).json({ user: tokenUser });
-  const user = await User.create({name,email,password,verifiactionToken,isVerified:false})
-  res.status(200).json({user})
+  const verificationToken = crypto.randomBytes(40).toString('hex');
+  console.log(`hi:${verificationToken}`)
+  const user = await User.create({name,email,password,verificationToken,isVerified:false})
+  await sendEmail(email,name,verificationToken)
+  res.status(200).json({msg:"verify your email"})
 };
 const login = async (req, res) => {
   const { email, password } = req.body;
@@ -52,20 +55,20 @@ const login = async (req, res) => {
 };
 
 const verifyEmail = async (req,res) => {
-  const {verifiactionToken,email} = req.body
-  const resp = await user.findOne({email})
+  const {verificationToken,email} = req.body
+  const resp = await User.findOne({email})
   if(!resp){
     throw new CustomError.UnauthenticatedError('Invalid link');
   }
-  if(resp.verifiactionToken!==verifiactionToken){
+  if(resp.verificationToken!==verificationToken){
     throw new CustomError.UnauthenticatedError('Invalid link');
   }
   resp.isVerified = true
-  user.verified = Date.now()
-  user.verifiactionToken = ''
+  resp.verified = Date.now()
+  resp.verificationToken = ''
 
-  await user.save()
-  res.status(StatusCodes.Ok).json({msg:'Email Verified'})
+  await resp.save()
+  res.status(StatusCodes.OK).json({msg:'Email Verified'})
 }
 
 const logout = async (req, res) => {
